@@ -2,6 +2,7 @@ import tkinter as tk
 import asyncio
 from tkinter.scrolledtext import ScrolledText
 from async_tkinter_loop import async_handler, async_mainloop
+from tkinter import messagebox
 
 
 button_clicked = asyncio.Event()
@@ -58,39 +59,52 @@ async def receive_messages(reader, messages_widget):
         messages_widget.configure(state='disabled')
         messages_widget.see(tk.END)
    
-async def main(messages, message_enter, login, room, label_room, chat):
+async def main(messages, message_enter, login, room, label_room, enter, chat):
     global loop, writer, reader
 
     if login == "":
         raise ValueError("Empty login")
     if room == "":
         raise ValueError("Empty room")
-    raise_frame(chat)
-
-    label_room.config(text=f"Комната {room}")
-
-    data = login + " " + room
-
 
     loop = asyncio.get_event_loop()
+
     print('Conecting to server...')
+
+    ip_address = '127.0.0.2'
+    port = 8888
+
     reader, writer = await asyncio.open_connection(
-        '127.0.0.2', 8888)
+        ip_address, port)
+    
     print('Conected')
+
+    data = login + " " + room
 
     msg_bytes = data.encode()
     writer.write(msg_bytes)
     await writer.drain()
 
-    receive_task = asyncio.create_task(receive_messages(reader, messages))
+    answer = await reader.read(4)
 
-    await write_messages(writer, message_enter)
+    if answer.decode() == "SIG1":
+        messagebox.showerror("Ошибка", "Пользователь существует. Введите, пожалуйста, другой логин")
+        raise_frame(enter)
+    else:
+        raise_frame(chat)
+        label_room.config(text=f"Комната {room}")
 
-    receive_task.cancel()
+        receive_task = asyncio.create_task(receive_messages(reader, messages))
+
+        await write_messages(writer, message_enter)
+
+        receive_task.cancel()
 
     print('Disconnecting from server...')
+
     writer.close()
     await writer.wait_closed()
+
     print('Done.')
     
 @async_handler
@@ -119,7 +133,6 @@ if __name__ == "__main__":
 
 
     chat = tk.Frame(root)
-    # , text = "Комната " + room_entry.get()
     room = tk.Label(chat)
     room.grid(row = 0, column = 0, padx = 10, pady = 5, ipadx= 10, ipady= 10, sticky = "news")
 
@@ -136,7 +149,7 @@ if __name__ == "__main__":
     for frame in (enter, chat):
         frame.grid(row=0, column=0, sticky='nsew')
 
-    submit = tk.Button(enter, text = "Войти", command = lambda: asyncio.create_task(main(messages, message_enter, login_entry.get(), room_entry.get(), room, chat)))
+    submit = tk.Button(enter, text = "Войти", command = lambda: asyncio.create_task(main(messages, message_enter, login_entry.get(), room_entry.get(), room, enter, chat)))
     submit.grid(row = 2, column=0, columnspan=2, padx = 10, pady = 5, ipadx= 10, ipady= 10, sticky = "news")
 
     exit = tk.Button(chat, text = "Выйти", command=lambda: quit_from_messanger(enter, messages))
