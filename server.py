@@ -30,7 +30,7 @@ async def connect_user(reader, writer):
 
     await broadcast_message(f'{name} has connected', group)
 
-    welcome = f'Welcome {name}. If you need help write /help'
+    welcome = f'Welcome {name}. If you need help, please, write @help or write @list if you want to know exists groups.'
     writer.write(welcome.encode())
     await writer.drain()
 
@@ -45,7 +45,6 @@ async def handle_chat_client(reader, writer):
             message = data.decode()
 
             if message == "QUIT":
-                # print("try disconnect")
                 break
 
             addr = writer.get_extra_info('peername')
@@ -68,17 +67,21 @@ async def broadcaster():
         
         author = packet[1]
 
-        request_by_server = re.findall(r'/....', message)
+        request_by_server = re.findall(r'@....', message)
+
         
-        if(len(request_by_server) > 0 and request_by_server[0] == '/help'):
-            message = "Вы можете отправлять личные сообщения,\n написав имя пользователя\n /list - список всех групп"
-        elif(len(request_by_server) > 0 and request_by_server[0] == '/list'):
-            message = "Groups:\n" + "\n".join(list(ALL_GROUPS))
-        print(f'Broadcast: {message.strip()}')
+        if(len(request_by_server) > 0 and request_by_server[0] == '@help'):
+            message = "[Server]: Вы можете отправлять личные сообщения через [имя]"
+        elif(len(request_by_server) > 0 and request_by_server[0] == '@list'):
+            message = "[Server]: Groups: " + " ".join(list(ALL_GROUPS))
+
         msg_bytes = message.encode()
 
         tasks = []
-        if(len(private_users) > 1):
+        print(private_users)
+        if request_by_server:
+            tasks = [asyncio.create_task(write_message(w, msg_bytes)) if(room == author and user == private_user) else asyncio.create_task(asyncio.sleep(0)) for user,(_,w, room) in ALL_USERS.items() for private_user in private_users]
+        elif(len(private_users) > 1):
             tasks = [asyncio.create_task(write_message(w, msg_bytes)) if(room == author and user == private_user) else asyncio.create_task(asyncio.sleep(0)) for user,(_,w, room) in ALL_USERS.items() for private_user in private_users]
         else:
             tasks = [asyncio.create_task(write_message(w, msg_bytes)) if(room == author) else asyncio.create_task(asyncio.sleep(0)) for _,(_,w, room) in ALL_USERS.items()]
